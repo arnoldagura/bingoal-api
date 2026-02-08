@@ -8,14 +8,15 @@ import (
 )
 
 type User struct {
-	ID        uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey"`
-	Email     string         `json:"email" gorm:"uniqueIndex;not null"`
-	Password  string         `json:"-" gorm:"not null"`
-	Name      string         `json:"name"`
-	CreatedAt time.Time      `json:"createdAt"`
-	UpdatedAt time.Time      `json:"updatedAt"`
-	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
-	Boards    []Board        `json:"boards,omitempty" gorm:"foreignKey:UserID"`
+	ID           uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey"`
+	Email        string         `json:"email" gorm:"uniqueIndex;not null"`
+	Password     string         `json:"-"`
+	AuthProvider string         `json:"authProvider" gorm:"default:email"`
+	Name         string         `json:"name"`
+	CreatedAt    time.Time      `json:"createdAt"`
+	UpdatedAt    time.Time      `json:"updatedAt"`
+	DeletedAt    gorm.DeletedAt `json:"-" gorm:"index"`
+	Boards       []Board        `json:"boards,omitempty" gorm:"foreignKey:UserID"`
 }
 
 func (u *User) BeforeCreate(tx *gorm.DB) error {
@@ -35,6 +36,10 @@ type RegisterRequest struct {
 type LoginRequest struct {
 	Email    string `json:"email" validate:"required,email"`
 	Password string `json:"password" validate:"required"`
+}
+
+type GoogleAuthRequest struct {
+	IDToken string `json:"idToken" validate:"required"`
 }
 
 type AuthResponse struct {

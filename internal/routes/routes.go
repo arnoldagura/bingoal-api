@@ -13,6 +13,7 @@ func Setup(app *fiber.App) {
 	auth := api.Group("/auth")
 	auth.Post("/register", handlers.Register)
 	auth.Post("/login", handlers.Login)
+	auth.Post("/google", handlers.GoogleLogin)
 
 	// Protected routes
 	protected := api.Group("/", middleware.Protected())
