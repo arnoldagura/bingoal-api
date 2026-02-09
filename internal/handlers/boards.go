@@ -2,12 +2,13 @@ package handlers
 
 import (
 	"time"
-
+	"sort"
 	"github.com/arnold/bingoals-api/internal/database"
 	"github.com/arnold/bingoals-api/internal/middleware"
 	"github.com/arnold/bingoals-api/internal/models"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 func GetBoards(c *fiber.Ctx) error {
@@ -29,17 +30,20 @@ func GetBoards(c *fiber.Ctx) error {
 		goalCount := 0
 		completedCount := 0
 		for _, goal := range board.Goals {
-			if goal.Title != nil && *goal.Title != "" && goal.Position != 12 { // Exclude grace cell
-				goalCount++
-				if goal.IsCompleted {
-					completedCount++
-				}
+			if goal.IsGraceSquare {
+				continue
+			}
+			goalCount++
+			if goal.IsCompleted {
+				completedCount++
 			}
 		}
 		summaries[i] = models.BoardSummary{
 			ID:             board.ID,
 			Title:          board.Title,
 			Year:           board.Year,
+			GridSize:       board.GridSize,
+			Category:       board.Category,
 			IsDefault:      board.IsDefault,
 			GoalCount:      goalCount,
 			CompletedCount: completedCount,
@@ -59,16 +63,59 @@ func GetBoard(c *fiber.Ctx) error {
 	}
 
 	var board models.Board
-	if err := database.DB.Where("id = ? AND user_id = ?", boardID, userID).
-		Preload("Goals").
+	if err := database.DB.
+		Where("id = ? AND user_id = ?", boardID, userID).
+		Preload("Goals", func(db *gorm.DB) *gorm.DB {
+			return db.Order("position ASC")
+		}).
+		Preload("Goals.MiniGoals").
+		Preload("Goals.Reflection").
 		First(&board).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Board not found",
 		})
 	}
 
+	// Inject virtual grace square (odd grids only)
+	if board.GridSize%2 == 1 {
+		centerPos := (board.GridSize * board.GridSize) / 2
+
+		found := false
+		for _, g := range board.Goals {
+			if g.Position == centerPos {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			graceTitle := "Grace"
+			if board.GraceSquareTitle != nil && *board.GraceSquareTitle != "" {
+				graceTitle = *board.GraceSquareTitle
+			}
+
+			grace := models.Goal{
+				ID:            uuid.Nil,
+				BoardID:       board.ID,
+				Position:      centerPos,
+				Title:         &graceTitle,
+				IsGraceSquare: true,
+				IsCompleted:   true,
+				Status:        "completed",
+				Progress:      100,
+			}
+
+			board.Goals = append(board.Goals, grace)
+
+			sort.Slice(board.Goals, func(i, j int) bool {
+				return board.Goals[i].Position < board.Goals[j].Position
+			})
+		}
+	}
+
 	return c.JSON(board)
 }
+
 
 func CreateBoard(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
@@ -91,15 +138,22 @@ func CreateBoard(c *fiber.Ctx) error {
 		year = time.Now().Year()
 	}
 
-	// Check if this is the first board (make it default)
+	gridSize := req.GridSize
+	if gridSize != 3 && gridSize != 7 {
+		gridSize = 5 // Default to 5x5
+	}
+
 	var count int64
 	database.DB.Model(&models.Board{}).Where("user_id = ?", userID).Count(&count)
 
 	board := models.Board{
-		UserID:    userID,
-		Title:     req.Title,
-		Year:      year,
-		IsDefault: count == 0,
+		UserID:           userID,
+		Title:            req.Title,
+		Year:             year,
+		GridSize:         gridSize,
+		Category:         req.Category,
+		GraceSquareTitle: req.GraceSquareTitle,
+		IsDefault:        count == 0,
 	}
 
 	if err := database.DB.Create(&board).Error; err != nil {
@@ -108,23 +162,9 @@ func CreateBoard(c *fiber.Ctx) error {
 		})
 	}
 
-	// Create 25 empty goals for the board
-	goals := make([]models.Goal, 25)
-	for i := 0; i < 25; i++ {
-		goals[i] = models.Goal{
-			BoardID:  board.ID,
-			Position: i,
-		}
-	}
-
-	if err := database.DB.Create(&goals).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to create goals",
-		})
-	}
-
-	// Reload with goals
-	database.DB.Preload("Goals").First(&board, board.ID)
+	database.DB.Preload("Goals", func(db *gorm.DB) *gorm.DB {
+		return db.Order("position ASC")
+	}).First(&board, board.ID)
 
 	return c.Status(fiber.StatusCreated).JSON(board)
 }
@@ -182,14 +222,8 @@ func DeleteBoard(c *fiber.Ctx) error {
 		})
 	}
 
-	// Check board count
 	var count int64
 	database.DB.Model(&models.Board{}).Where("user_id = ?", userID).Count(&count)
-	if count <= 1 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Cannot delete the last board",
-		})
-	}
 
 	var board models.Board
 	if err := database.DB.Where("id = ? AND user_id = ?", boardID, userID).First(&board).Error; err != nil {
@@ -200,17 +234,14 @@ func DeleteBoard(c *fiber.Ctx) error {
 
 	wasDefault := board.IsDefault
 
-	// Delete goals first
 	database.DB.Where("board_id = ?", boardID).Delete(&models.Goal{})
 
-	// Delete board
 	if err := database.DB.Delete(&board).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to delete board",
 		})
 	}
 
-	// If deleted board was default, set another as default
 	if wasDefault {
 		var newDefault models.Board
 		if err := database.DB.Where("user_id = ?", userID).First(&newDefault).Error; err == nil {

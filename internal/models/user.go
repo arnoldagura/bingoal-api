@@ -8,15 +8,32 @@ import (
 )
 
 type User struct {
-	ID           uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey"`
-	Email        string         `json:"email" gorm:"uniqueIndex;not null"`
-	Password     string         `json:"-"`
-	AuthProvider string         `json:"authProvider" gorm:"default:email"`
-	Name         string         `json:"name"`
-	CreatedAt    time.Time      `json:"createdAt"`
-	UpdatedAt    time.Time      `json:"updatedAt"`
-	DeletedAt    gorm.DeletedAt `json:"-" gorm:"index"`
-	Boards       []Board        `json:"boards,omitempty" gorm:"foreignKey:UserID"`
+	ID             uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey"`
+	Email          string         `json:"email" gorm:"uniqueIndex;not null"`
+	Password       string         `json:"-"`
+	AuthProvider   string         `json:"authProvider" gorm:"default:email"`
+	Name           string         `json:"name"`
+	DailyStreak    int            `json:"dailyStreak" gorm:"default:0"`
+	TotalGems      int            `json:"totalGems" gorm:"default:0"`
+	LastActiveDate *time.Time     `json:"lastActiveDate"`
+	CreatedAt      time.Time      `json:"createdAt"`
+	UpdatedAt      time.Time      `json:"updatedAt"`
+	DeletedAt      gorm.DeletedAt `json:"-" gorm:"index"`
+	Boards         []Board        `json:"boards,omitempty" gorm:"foreignKey:UserID"`
+}
+
+
+func (u *User) Level() string {
+	switch {
+	case u.TotalGems >= 2000:
+		return "diamond"
+	case u.TotalGems >= 500:
+		return "gold"
+	case u.TotalGems >= 100:
+		return "silver"
+	default:
+		return "bronze"
+	}
 }
 
 func (u *User) BeforeCreate(tx *gorm.DB) error {

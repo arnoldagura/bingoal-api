@@ -21,20 +21,11 @@ func UpdateGoal(c *fiber.Ctx) error {
 	}
 
 	position, err := strconv.Atoi(c.Params("position"))
-	if err != nil || position < 0 || position > 24 {
+	if err != nil || position < 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid position (must be 0-24)",
+			"error": "Invalid position",
 		})
 	}
-
-	// Grace cell (position 12) cannot be edited
-	if position == 12 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Cannot edit the grace cell",
-		})
-	}
-
-	// Verify board ownership
 	var board models.Board
 	if err := database.DB.Where("id = ? AND user_id = ?", boardID, userID).First(&board).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
@@ -42,14 +33,28 @@ func UpdateGoal(c *fiber.Ctx) error {
 		})
 	}
 
-	// Find or create goal
+	maxPosition := board.GridSize*board.GridSize - 1
+	if position > maxPosition {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid position for this board's grid size",
+		})
+	}
+
 	var goal models.Goal
-	result := database.DB.Where("board_id = ? AND position = ?", boardID, position).First(&goal)
-	if result.Error != nil {
+	isNew := false
+	if err := database.DB.Where("board_id = ? AND position = ?", boardID, position).First(&goal).Error; err != nil {
+		
 		goal = models.Goal{
 			BoardID:  boardID,
 			Position: position,
 		}
+		isNew = true
+	}
+
+	if goal.IsGraceSquare {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Cannot edit the grace square",
+		})
 	}
 
 	var req models.UpdateGoalRequest
@@ -71,17 +76,27 @@ func UpdateGoal(c *fiber.Ctx) error {
 	if req.IsCompleted != nil {
 		goal.IsCompleted = *req.IsCompleted
 		if *req.IsCompleted {
+			goal.Status = "completed"
 			now := time.Now()
 			goal.CompletedAt = &now
 		} else {
+			goal.Status = "not_started"
 			goal.CompletedAt = nil
 		}
 	}
 
-	if err := database.DB.Save(&goal).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to update goal",
-		})
+	if isNew {
+		if err := database.DB.Create(&goal).Error; err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Failed to create goal",
+			})
+		}
+	} else {
+		if err := database.DB.Save(&goal).Error; err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Failed to update goal",
+			})
+		}
 	}
 
 	return c.JSON(goal)
@@ -97,24 +112,23 @@ func ToggleGoalCompletion(c *fiber.Ctx) error {
 	}
 
 	position, err := strconv.Atoi(c.Params("position"))
-	if err != nil || position < 0 || position > 24 {
+	if err != nil || position < 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid position (must be 0-24)",
+			"error": "Invalid position",
 		})
 	}
 
-	// Grace cell (position 12) cannot be toggled
-	if position == 12 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Cannot toggle the grace cell",
-		})
-	}
-
-	// Verify board ownership
 	var board models.Board
 	if err := database.DB.Where("id = ? AND user_id = ?", boardID, userID).First(&board).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Board not found",
+		})
+	}
+
+	maxPosition := board.GridSize*board.GridSize - 1
+	if position > maxPosition {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid position for this board's grid size",
 		})
 	}
 
@@ -125,13 +139,55 @@ func ToggleGoalCompletion(c *fiber.Ctx) error {
 		})
 	}
 
-	goal.IsCompleted = !goal.IsCompleted
-	if goal.IsCompleted {
-		now := time.Now()
-		goal.CompletedAt = &now
-	} else {
-		goal.CompletedAt = nil
+	if goal.IsGraceSquare {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Cannot toggle the grace square",
+		})
 	}
+
+	var miniGoals []models.MiniGoal
+	database.DB.Where("goal_id = ?", goal.ID).Find(&miniGoals)
+
+	wasCompleted := goal.Status == "completed"
+
+	hasMiniGoals := len(miniGoals) > 0
+
+	var nextStatus string
+	var completedAt *time.Time
+	var isCompleted bool
+
+	now := time.Now()
+
+	if !hasMiniGoals {
+		if goal.Status == "completed" {
+			nextStatus = "not_started"
+			isCompleted = false
+			completedAt = nil
+		} else {
+			nextStatus = "completed"
+			isCompleted = true
+			completedAt = &now
+		}
+	} else {
+		switch goal.Status {
+		case "in_progress":
+			nextStatus = "completed"
+			isCompleted = true
+			completedAt = &now
+		case "completed":
+			nextStatus = "not_started"
+			isCompleted = false
+			completedAt = nil
+		default:
+			nextStatus = "in_progress"
+			isCompleted = false
+			completedAt = nil
+		}
+	}
+
+	goal.Status = nextStatus
+	goal.IsCompleted = isCompleted
+	goal.CompletedAt = completedAt
 
 	if err := database.DB.Save(&goal).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -139,5 +195,144 @@ func ToggleGoalCompletion(c *fiber.Ctx) error {
 		})
 	}
 
-	return c.JSON(goal)
+	
+	gemsAwarded := 0
+	milestones := []string{}
+	if goal.Status == "completed" && !wasCompleted {
+		
+		switch board.GridSize {
+		case 3:
+			gemsAwarded = 5
+		case 7:
+			gemsAwarded = 2
+		default:
+			gemsAwarded = 3
+		}
+
+		
+		var boardGoals []models.Goal
+		database.DB.Where("board_id = ?", boardID).Find(&boardGoals)
+
+		gridSize := board.GridSize
+
+		
+		completed := make(map[int]bool)
+		for _, g := range boardGoals {
+			if g.IsGraceSquare || g.Status == "completed" {
+				completed[g.Position] = true
+			}
+		}
+
+		milestones = []string{}
+		row := position / gridSize
+		col := position % gridSize
+
+		
+		rowDone := true
+		for c := 0; c < gridSize; c++ {
+			if !completed[row*gridSize+c] {
+				rowDone = false
+				break
+			}
+		}
+		if rowDone {
+			milestones = append(milestones, "row")
+			gemsAwarded += 10
+		}
+
+		
+		colDone := true
+		for r := 0; r < gridSize; r++ {
+			if !completed[r*gridSize+col] {
+				colDone = false
+				break
+			}
+		}
+		if colDone {
+			milestones = append(milestones, "column")
+			gemsAwarded += 10
+		}
+
+		
+		if row == col {
+			diagDone := true
+			for i := 0; i < gridSize; i++ {
+				if !completed[i*gridSize+i] {
+					diagDone = false
+					break
+				}
+			}
+			if diagDone {
+				milestones = append(milestones, "diagonal")
+				gemsAwarded += 10
+			}
+		}
+
+		
+		if row+col == gridSize-1 {
+			antiDone := true
+			for i := 0; i < gridSize; i++ {
+				if !completed[i*gridSize+(gridSize-1-i)] {
+					antiDone = false
+					break
+				}
+			}
+			if antiDone {
+				milestones = append(milestones, "anti-diagonal")
+				gemsAwarded += 10
+			}
+		}
+
+		
+		corners := []int{0, gridSize - 1, (gridSize - 1) * gridSize, gridSize*gridSize - 1}
+		cornersDone := true
+		for _, p := range corners {
+			if !completed[p] {
+				cornersDone = false
+				break
+			}
+		}
+		if cornersDone {
+			milestones = append(milestones, "corners")
+			gemsAwarded += 15
+		}
+
+		
+		if len(completed) == gridSize*gridSize {
+			milestones = append(milestones, "blackout")
+			gemsAwarded += 50
+		}
+
+		
+		var user models.User
+		if err := database.DB.First(&user, userID).Error; err == nil {
+			user.TotalGems += gemsAwarded
+
+			today := time.Now().Truncate(24 * time.Hour)
+			if user.LastActiveDate != nil {
+				lastActive := user.LastActiveDate.Truncate(24 * time.Hour)
+				daysSince := int(today.Sub(lastActive).Hours() / 24)
+				if daysSince == 1 {
+					user.DailyStreak++
+				} else if daysSince > 1 {
+					user.DailyStreak = 1
+				}
+				
+			} else {
+				user.DailyStreak = 1
+			}
+			user.LastActiveDate = &today
+
+			database.DB.Save(&user)
+		}
+
+		
+		createBlankReflection(goal.ID)
+	}
+
+	return c.JSON(fiber.Map{
+		"goal":        goal,
+		"gemsAwarded": gemsAwarded,
+		"milestones":  milestones,
+	})
 }

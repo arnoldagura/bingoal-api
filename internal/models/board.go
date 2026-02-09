@@ -12,7 +12,10 @@ type Board struct {
 	UserID    uuid.UUID      `json:"userId" gorm:"type:uuid;index;not null"`
 	Title     string         `json:"title" gorm:"not null"`
 	Year      int            `json:"year" gorm:"not null"`
-	IsDefault bool           `json:"isDefault" gorm:"default:false"`
+	GridSize  int            `json:"gridSize" gorm:"not null;default:5"`
+	Category         *string        `json:"category" gorm:"default:null"`
+	GraceSquareTitle *string        `json:"graceSquareTitle" gorm:"default:null"`
+	IsDefault        bool           `json:"isDefault" gorm:"default:false"`
 	CreatedAt time.Time      `json:"createdAt"`
 	UpdatedAt time.Time      `json:"updatedAt"`
 	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
@@ -28,8 +31,11 @@ func (b *Board) BeforeCreate(tx *gorm.DB) error {
 
 // Board DTOs
 type CreateBoardRequest struct {
-	Title string `json:"title" validate:"required"`
-	Year  int    `json:"year"`
+	Title            string  `json:"title" validate:"required"`
+	Year             int     `json:"year"`
+	GridSize         int     `json:"gridSize"`
+	Category         *string `json:"category"`
+	GraceSquareTitle *string `json:"graceSquareTitle"`
 }
 
 type UpdateBoardRequest struct {
@@ -41,6 +47,8 @@ type BoardSummary struct {
 	ID             uuid.UUID `json:"id"`
 	Title          string    `json:"title"`
 	Year           int       `json:"year"`
+	GridSize       int       `json:"gridSize"`
+	Category       *string   `json:"category"`
 	IsDefault      bool      `json:"isDefault"`
 	GoalCount      int       `json:"goalCount"`
 	CompletedCount int       `json:"completedCount"`

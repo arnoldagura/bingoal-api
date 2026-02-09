@@ -9,19 +9,15 @@ import (
 func Setup(app *fiber.App) {
 	api := app.Group("/api")
 
-	// Auth routes (public)
 	auth := api.Group("/auth")
 	auth.Post("/register", handlers.Register)
 	auth.Post("/login", handlers.Login)
 	auth.Post("/google", handlers.GoogleLogin)
 
-	// Protected routes
 	protected := api.Group("/", middleware.Protected())
 
-	// User routes
 	protected.Get("/me", handlers.GetMe)
 
-	// Board routes
 	boards := protected.Group("/boards")
 	boards.Get("/", handlers.GetBoards)
 	boards.Post("/", handlers.CreateBoard)
@@ -29,7 +25,14 @@ func Setup(app *fiber.App) {
 	boards.Put("/:id", handlers.UpdateBoard)
 	boards.Delete("/:id", handlers.DeleteBoard)
 
-	// Goal routes
 	boards.Put("/:boardId/goals/:position", handlers.UpdateGoal)
 	boards.Post("/:boardId/goals/:position/toggle", handlers.ToggleGoalCompletion)
+
+	boards.Post("/:boardId/goals/:position/mini-goals", handlers.CreateMiniGoal)
+	boards.Post("/:boardId/goals/:position/mini-goals/:miniGoalId/toggle", handlers.ToggleMiniGoal)
+	boards.Put("/:boardId/goals/:position/mini-goals/:miniGoalId", handlers.UpdateMiniGoal)
+	boards.Delete("/:boardId/goals/:position/mini-goals/:miniGoalId", handlers.DeleteMiniGoal)
+
+	boards.Get("/:boardId/goals/:position/reflection", handlers.GetReflection)
+	boards.Put("/:boardId/goals/:position/reflection", handlers.UpsertReflection)
 }

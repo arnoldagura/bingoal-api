@@ -126,7 +126,18 @@ func GetMe(c *fiber.Ctx) error {
 		})
 	}
 
-	return c.JSON(user)
+	return c.JSON(fiber.Map{
+		"id":             user.ID,
+		"email":          user.Email,
+		"authProvider":   user.AuthProvider,
+		"name":           user.Name,
+		"dailyStreak":    user.DailyStreak,
+		"totalGems":      user.TotalGems,
+		"lastActiveDate": user.LastActiveDate,
+		"level":          user.Level(),
+		"createdAt":      user.CreatedAt,
+		"updatedAt":      user.UpdatedAt,
+	})
 }
 
 // googleTokenInfo represents the response from Google's tokeninfo endpoint
