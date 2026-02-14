@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"time"
-	"sort"
 	"github.com/arnold/bingoals-api/internal/database"
 	"github.com/arnold/bingoals-api/internal/middleware"
 	"github.com/arnold/bingoals-api/internal/models"
@@ -30,9 +29,6 @@ func GetBoards(c *fiber.Ctx) error {
 		goalCount := 0
 		completedCount := 0
 		for _, goal := range board.Goals {
-			if goal.IsGraceSquare {
-				continue
-			}
 			goalCount++
 			if goal.IsCompleted {
 				completedCount++
@@ -74,43 +70,6 @@ func GetBoard(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Board not found",
 		})
-	}
-
-	// Inject virtual grace square (odd grids only)
-	if board.GridSize%2 == 1 {
-		centerPos := (board.GridSize * board.GridSize) / 2
-
-		found := false
-		for _, g := range board.Goals {
-			if g.Position == centerPos {
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			graceTitle := "Grace"
-			if board.GraceSquareTitle != nil && *board.GraceSquareTitle != "" {
-				graceTitle = *board.GraceSquareTitle
-			}
-
-			grace := models.Goal{
-				ID:            uuid.Nil,
-				BoardID:       board.ID,
-				Position:      centerPos,
-				Title:         &graceTitle,
-				IsGraceSquare: true,
-				IsCompleted:   true,
-				Status:        "completed",
-				Progress:      100,
-			}
-
-			board.Goals = append(board.Goals, grace)
-
-			sort.Slice(board.Goals, func(i, j int) bool {
-				return board.Goals[i].Position < board.Goals[j].Position
-			})
-		}
 	}
 
 	return c.JSON(board)

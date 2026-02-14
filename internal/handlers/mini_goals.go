@@ -85,12 +85,6 @@ func CreateMiniGoal(c *fiber.Ctx) error {
 		return fiberErr
 	}
 
-	if goal.IsGraceSquare {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Cannot add mini-goals to grace square",
-		})
-	}
-
 	var req models.CreateMiniGoalRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{

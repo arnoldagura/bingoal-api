@@ -51,12 +51,6 @@ func UpdateGoal(c *fiber.Ctx) error {
 		isNew = true
 	}
 
-	if goal.IsGraceSquare {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Cannot edit the grace square",
-		})
-	}
-
 	var req models.UpdateGoalRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -70,6 +64,9 @@ func UpdateGoal(c *fiber.Ctx) error {
 	if req.Description != nil {
 		goal.Description = req.Description
 	}
+	if req.Icon != nil {
+		goal.Icon = req.Icon
+	}
 	if req.ImageURL != nil {
 		goal.ImageURL = req.ImageURL
 	}
@@ -82,6 +79,22 @@ func UpdateGoal(c *fiber.Ctx) error {
 		} else {
 			goal.Status = "not_started"
 			goal.CompletedAt = nil
+		}
+	}
+
+	// Clear goal: when title is set to empty string, reset everything
+	if req.Title != nil && *req.Title == "" {
+		goal.Description = nil
+		goal.Icon = nil
+		goal.ImageURL = nil
+		goal.Status = "not_started"
+		goal.IsCompleted = false
+		goal.Progress = 0
+		goal.CompletedAt = nil
+		// Delete associated mini-goals and reflection
+		if !isNew {
+			database.DB.Where("goal_id = ?", goal.ID).Delete(&models.MiniGoal{})
+			database.DB.Where("goal_id = ?", goal.ID).Delete(&models.Reflection{})
 		}
 	}
 
@@ -136,12 +149,6 @@ func ToggleGoalCompletion(c *fiber.Ctx) error {
 	if err := database.DB.Where("board_id = ? AND position = ?", boardID, position).First(&goal).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Goal not found",
-		})
-	}
-
-	if goal.IsGraceSquare {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Cannot toggle the grace square",
 		})
 	}
 
@@ -218,7 +225,7 @@ func ToggleGoalCompletion(c *fiber.Ctx) error {
 		
 		completed := make(map[int]bool)
 		for _, g := range boardGoals {
-			if g.IsGraceSquare || g.Status == "completed" {
+			if g.Status == "completed" {
 				completed[g.Position] = true
 			}
 		}

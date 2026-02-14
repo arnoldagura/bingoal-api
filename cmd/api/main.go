@@ -45,6 +45,9 @@ func main() {
 		AllowMethods: "GET, POST, PUT, DELETE, PATCH",
 	}))
 
+	// Serve uploaded files
+	app.Static("/uploads", "./uploads")
+
 	// Setup routes
 	routes.Setup(app)
 

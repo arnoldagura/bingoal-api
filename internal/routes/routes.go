@@ -35,4 +35,7 @@ func Setup(app *fiber.App) {
 
 	boards.Get("/:boardId/goals/:position/reflection", handlers.GetReflection)
 	boards.Put("/:boardId/goals/:position/reflection", handlers.UpsertReflection)
+
+	// File upload
+	protected.Post("/upload", handlers.UploadImage)
 }

@@ -1,0 +1,24 @@
+databases:
+  - name: bingoals-db
+    plan: free
+    databaseName: bingoals
+    user: bingoals
+
+services:
+  - type: web
+    name: bingoal-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: DATABASE_URL
+        fromDatabase:
+          name: bingoals-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: GOOGLE_CLIENT_IDS
+        value: 656331294595-huh2kgj7go6770uh1ueti0bqm63th7tj.apps.googleusercontent.com,656331294595-3lsfm9hit45b594plokdk17i6tq8p0u8.apps.googleusercontent.com
+    healthCheckPath: /health

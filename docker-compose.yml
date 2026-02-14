@@ -1,7 +1,7 @@
 services:
   db:
     image: postgres:16-alpine
-    container_name: bingoals-db
+    container_name: bingoals-mobile-db
     restart: unless-stopped
     environment:
       POSTGRES_USER: bingoals
