@@ -41,5 +41,10 @@ func Migrate() error {
 		&models.Goal{},
 		&models.MiniGoal{},
 		&models.Reflection{},
+		&models.BoardMember{},
+		&models.BoardInvite{},
+		&models.Activity{},
+		&models.Reaction{},
+		&models.Notification{},
 	)
 }

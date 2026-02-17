@@ -12,6 +12,7 @@ import (
 	"github.com/arnold/bingoals-api/internal/middleware"
 	"github.com/arnold/bingoals-api/internal/models"
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -131,12 +132,94 @@ func GetMe(c *fiber.Ctx) error {
 		"email":          user.Email,
 		"authProvider":   user.AuthProvider,
 		"name":           user.Name,
+		"displayName":    user.DisplayName,
+		"avatarUrl":      user.AvatarURL,
+		"bio":            user.Bio,
 		"dailyStreak":    user.DailyStreak,
 		"totalGems":      user.TotalGems,
 		"lastActiveDate": user.LastActiveDate,
 		"level":          user.Level(),
 		"createdAt":      user.CreatedAt,
 		"updatedAt":      user.UpdatedAt,
+	})
+}
+
+func UpdateProfile(c *fiber.Ctx) error {
+	userID := middleware.GetUserID(c)
+
+	var user models.User
+	if err := database.DB.First(&user, userID).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "User not found",
+		})
+	}
+
+	var req models.UpdateProfileRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
+	}
+
+	if req.DisplayName != nil {
+		user.DisplayName = *req.DisplayName
+	}
+	if req.AvatarURL != nil {
+		user.AvatarURL = *req.AvatarURL
+	}
+	if req.Bio != nil {
+		user.Bio = *req.Bio
+	}
+	if req.Name != nil {
+		user.Name = *req.Name
+	}
+
+	if err := database.DB.Save(&user).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to update profile",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"id":             user.ID,
+		"email":          user.Email,
+		"authProvider":   user.AuthProvider,
+		"name":           user.Name,
+		"displayName":    user.DisplayName,
+		"avatarUrl":      user.AvatarURL,
+		"bio":            user.Bio,
+		"dailyStreak":    user.DailyStreak,
+		"totalGems":      user.TotalGems,
+		"lastActiveDate": user.LastActiveDate,
+		"level":          user.Level(),
+		"createdAt":      user.CreatedAt,
+		"updatedAt":      user.UpdatedAt,
+	})
+}
+
+func GetUserProfile(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid user ID",
+		})
+	}
+
+	var user models.User
+	if err := database.DB.First(&user, id).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "User not found",
+		})
+	}
+
+	// Return limited public profile (no email, no streak internals)
+	return c.JSON(fiber.Map{
+		"id":          user.ID,
+		"name":        user.Name,
+		"displayName": user.DisplayName,
+		"avatarUrl":   user.AvatarURL,
+		"bio":         user.Bio,
+		"level":       user.Level(),
 	})
 }
 

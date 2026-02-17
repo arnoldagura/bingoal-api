@@ -13,11 +13,28 @@ import (
 func GetBoards(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 
+	// Get personal boards (owned by user) + shared boards (user is a member)
 	var boards []models.Board
-	if err := database.DB.Where("user_id = ?", userID).
+
+	// Find board IDs where user is a member (for shared boards)
+	var memberBoardIDs []uuid.UUID
+	database.DB.Model(&models.BoardMember{}).
+		Where("user_id = ?", userID).
+		Pluck("board_id", &memberBoardIDs)
+
+	query := database.DB.
 		Preload("Goals").
-		Order("created_at DESC").
-		Find(&boards).Error; err != nil {
+		Preload("Members.User").
+		Order("created_at DESC")
+
+	if len(memberBoardIDs) > 0 {
+		// Personal boards by user_id OR shared boards by membership
+		query = query.Where("user_id = ? OR id IN ?", userID, memberBoardIDs)
+	} else {
+		query = query.Where("user_id = ?", userID)
+	}
+
+	if err := query.Find(&boards).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to fetch boards",
 		})
@@ -34,15 +51,32 @@ func GetBoards(c *fiber.Ctx) error {
 				completedCount++
 			}
 		}
+
+		// Build member info
+		var members []models.MemberInfo
+		for _, m := range board.Members {
+			members = append(members, models.MemberInfo{
+				ID:          m.UserID,
+				Name:        m.User.Name,
+				DisplayName: m.User.DisplayName,
+				AvatarURL:   m.User.AvatarURL,
+				Role:        m.Role,
+			})
+		}
+
 		summaries[i] = models.BoardSummary{
 			ID:             board.ID,
 			Title:          board.Title,
 			Year:           board.Year,
 			GridSize:       board.GridSize,
 			Category:       board.Category,
+			BoardType:      board.BoardType,
+			MaxMembers:     board.MaxMembers,
 			IsDefault:      board.IsDefault,
 			GoalCount:      goalCount,
 			CompletedCount: completedCount,
+			MemberCount:    len(board.Members),
+			Members:        members,
 		}
 	}
 
@@ -60,16 +94,27 @@ func GetBoard(c *fiber.Ctx) error {
 
 	var board models.Board
 	if err := database.DB.
-		Where("id = ? AND user_id = ?", boardID, userID).
+		Where("id = ?", boardID).
 		Preload("Goals", func(db *gorm.DB) *gorm.DB {
 			return db.Order("position ASC")
 		}).
 		Preload("Goals.MiniGoals").
 		Preload("Goals.Reflection").
+		Preload("Members.User").
 		First(&board).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Board not found",
 		})
+	}
+
+	// Check access: user must be owner or a member
+	if board.UserID != userID {
+		var membership models.BoardMember
+		if err := database.DB.Where("board_id = ? AND user_id = ?", boardID, userID).First(&membership).Error; err != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "Board not found",
+			})
+		}
 	}
 
 	return c.JSON(board)
@@ -105,12 +150,24 @@ func CreateBoard(c *fiber.Ctx) error {
 	var count int64
 	database.DB.Model(&models.Board{}).Where("user_id = ?", userID).Count(&count)
 
+	boardType := req.BoardType
+	if boardType != "shared" {
+		boardType = "personal"
+	}
+
+	maxMembers := req.MaxMembers
+	if maxMembers <= 0 {
+		maxMembers = 5
+	}
+
 	board := models.Board{
 		UserID:           userID,
 		Title:            req.Title,
 		Year:             year,
 		GridSize:         gridSize,
 		Category:         req.Category,
+		BoardType:        boardType,
+		MaxMembers:       maxMembers,
 		GraceSquareTitle: req.GraceSquareTitle,
 		IsDefault:        count == 0,
 	}
@@ -121,9 +178,17 @@ func CreateBoard(c *fiber.Ctx) error {
 		})
 	}
 
+	// Auto-create board member with owner role
+	member := models.BoardMember{
+		BoardID: board.ID,
+		UserID:  userID,
+		Role:    "owner",
+	}
+	database.DB.Create(&member)
+
 	database.DB.Preload("Goals", func(db *gorm.DB) *gorm.DB {
 		return db.Order("position ASC")
-	}).First(&board, board.ID)
+	}).Preload("Members.User").First(&board, board.ID)
 
 	return c.Status(fiber.StatusCreated).JSON(board)
 }

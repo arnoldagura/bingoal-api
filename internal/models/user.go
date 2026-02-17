@@ -13,6 +13,9 @@ type User struct {
 	Password       string         `json:"-"`
 	AuthProvider   string         `json:"authProvider" gorm:"default:email"`
 	Name           string         `json:"name"`
+	DisplayName    string         `json:"displayName"`
+	AvatarURL      string         `json:"avatarUrl"`
+	Bio            string         `json:"bio"`
 	DailyStreak    int            `json:"dailyStreak" gorm:"default:0"`
 	TotalGems      int            `json:"totalGems" gorm:"default:0"`
 	LastActiveDate *time.Time     `json:"lastActiveDate"`
@@ -57,6 +60,13 @@ type LoginRequest struct {
 
 type GoogleAuthRequest struct {
 	IDToken string `json:"idToken" validate:"required"`
+}
+
+type UpdateProfileRequest struct {
+	DisplayName *string `json:"displayName"`
+	AvatarURL   *string `json:"avatarUrl"`
+	Bio         *string `json:"bio"`
+	Name        *string `json:"name"`
 }
 
 type AuthResponse struct {

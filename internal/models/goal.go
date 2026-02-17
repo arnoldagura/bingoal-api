@@ -15,6 +15,8 @@ type Goal struct {
 	Description *string        `json:"description"`
 	Icon        *string        `json:"icon"`
 	ImageURL    *string        `json:"imageUrl"`
+	AssignedTo   *uuid.UUID     `json:"assignedTo" gorm:"type:uuid"`
+	CompletedBy  *uuid.UUID     `json:"completedBy" gorm:"type:uuid"`
 	Status       string         `json:"status" gorm:"not null;default:'not_started'"` // not_started, in_progress, completed
 	IsCompleted  bool           `json:"isCompleted" gorm:"default:false"`
 	IsGraceSquare bool          `json:"isGraceSquare" gorm:"default:false"`
@@ -36,9 +38,10 @@ func (g *Goal) BeforeCreate(tx *gorm.DB) error {
 
 
 type UpdateGoalRequest struct {
-	Title       *string `json:"title"`
-	Description *string `json:"description"`
-	Icon        *string `json:"icon"`
-	ImageURL    *string `json:"imageUrl"`
-	IsCompleted *bool   `json:"isCompleted"`
+	Title       *string    `json:"title"`
+	Description *string    `json:"description"`
+	Icon        *string    `json:"icon"`
+	ImageURL    *string    `json:"imageUrl"`
+	IsCompleted *bool      `json:"isCompleted"`
+	AssignedTo  *uuid.UUID `json:"assignedTo"`
 }

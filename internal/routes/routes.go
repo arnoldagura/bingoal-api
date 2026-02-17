@@ -17,6 +17,8 @@ func Setup(app *fiber.App) {
 	protected := api.Group("/", middleware.Protected())
 
 	protected.Get("/me", handlers.GetMe)
+	protected.Put("/me", handlers.UpdateProfile)
+	protected.Get("/users/:id", handlers.GetUserProfile)
 
 	boards := protected.Group("/boards")
 	boards.Get("/", handlers.GetBoards)
@@ -35,6 +37,29 @@ func Setup(app *fiber.App) {
 
 	boards.Get("/:boardId/goals/:position/reflection", handlers.GetReflection)
 	boards.Put("/:boardId/goals/:position/reflection", handlers.UpsertReflection)
+
+	// Board invites & members
+	boards.Post("/:id/invites", handlers.CreateInvite)
+	boards.Get("/:id/members", handlers.GetMembers)
+	boards.Delete("/:id/members/:userId", handlers.RemoveMember)
+	boards.Post("/:id/leave", handlers.LeaveBoard)
+
+	// Board activity
+	boards.Get("/:id/activity", handlers.GetBoardActivity)
+
+	// Join board via invite code
+	protected.Post("/invites/:code/join", handlers.JoinBoard)
+
+	// Goal reactions
+	goals := protected.Group("/goals")
+	goals.Post("/:id/reactions", handlers.AddReaction)
+	goals.Get("/:id/reactions", handlers.GetGoalReactions)
+
+	// Notifications
+	notifications := protected.Group("/notifications")
+	notifications.Get("/", handlers.GetNotifications)
+	notifications.Put("/:id/read", handlers.MarkNotificationRead)
+	notifications.Post("/read-all", handlers.MarkAllRead)
 
 	// File upload
 	protected.Post("/upload", handlers.UploadImage)

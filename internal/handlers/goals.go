@@ -27,7 +27,14 @@ func UpdateGoal(c *fiber.Ctx) error {
 		})
 	}
 	var board models.Board
-	if err := database.DB.Where("id = ? AND user_id = ?", boardID, userID).First(&board).Error; err != nil {
+	if err := database.DB.First(&board, boardID).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Board not found",
+		})
+	}
+
+	// Check access: owner or member
+	if board.UserID != userID && !isBoardMember(boardID, userID) {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Board not found",
 		})
@@ -132,7 +139,14 @@ func ToggleGoalCompletion(c *fiber.Ctx) error {
 	}
 
 	var board models.Board
-	if err := database.DB.Where("id = ? AND user_id = ?", boardID, userID).First(&board).Error; err != nil {
+	if err := database.DB.First(&board, boardID).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Board not found",
+		})
+	}
+
+	// Check access: owner or member
+	if board.UserID != userID && !isBoardMember(boardID, userID) {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Board not found",
 		})
@@ -335,6 +349,34 @@ func ToggleGoalCompletion(c *fiber.Ctx) error {
 
 		
 		createBlankReflection(goal.ID)
+
+		// Set completedBy for shared boards
+		goal.CompletedBy = &userID
+		database.DB.Save(&goal)
+
+		// Log activity + notify for shared boards
+		if board.BoardType == "shared" {
+			goalTitle := ""
+			if goal.Title != nil {
+				goalTitle = *goal.Title
+			}
+			LogActivity(boardID, userID, "goal_completed", &goal.ID, map[string]interface{}{
+				"goalTitle": goalTitle,
+				"position":  goal.Position,
+			})
+
+			var completer models.User
+			database.DB.First(&completer, userID)
+			name := completer.DisplayName
+			if name == "" {
+				name = completer.Name
+			}
+			notifyBoardMembers(boardID, userID, "goal_completed",
+				"Goal completed!",
+				name+" completed \""+goalTitle+"\" on "+board.Title,
+				map[string]interface{}{"boardId": boardID.String(), "goalId": goal.ID.String()},
+			)
+		}
 	}
 
 	return c.JSON(fiber.Map{
