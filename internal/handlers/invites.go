@@ -126,6 +126,16 @@ func JoinBoard(c *fiber.Ctx) error {
 		map[string]interface{}{"boardId": invite.BoardID.String()},
 	)
 
+	// Broadcast member joined via WebSocket
+	WS.Broadcast(invite.BoardID, userID, WSEvent{
+		Type:    EventMemberJoined,
+		BoardID: invite.BoardID.String(),
+		UserID:  userID.String(),
+		Data: map[string]interface{}{
+			"userName": name,
+		},
+	})
+
 	return c.JSON(fiber.Map{
 		"message": "Successfully joined board",
 		"boardId": invite.BoardID,
@@ -212,6 +222,13 @@ func RemoveMember(c *fiber.Ctx) error {
 		"removedBy": userID,
 	})
 
+	// Broadcast member removed via WebSocket
+	WS.Broadcast(boardID, userID, WSEvent{
+		Type:    EventMemberLeft,
+		BoardID: boardID.String(),
+		UserID:  targetUserID.String(),
+	})
+
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
@@ -247,6 +264,13 @@ func LeaveBoard(c *fiber.Ctx) error {
 	}
 
 	LogActivity(boardID, userID, "member_left", nil, nil)
+
+	// Broadcast member left via WebSocket
+	WS.Broadcast(boardID, userID, WSEvent{
+		Type:    EventMemberLeft,
+		BoardID: boardID.String(),
+		UserID:  userID.String(),
+	})
 
 	return c.SendStatus(fiber.StatusNoContent)
 }

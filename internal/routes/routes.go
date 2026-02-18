@@ -4,6 +4,7 @@ import (
 	"github.com/arnold/bingoals-api/internal/handlers"
 	"github.com/arnold/bingoals-api/internal/middleware"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/websocket/v2"
 )
 
 func Setup(app *fiber.App) {
@@ -63,4 +64,8 @@ func Setup(app *fiber.App) {
 
 	// File upload
 	protected.Post("/upload", handlers.UploadImage)
+
+	// WebSocket for real-time board updates
+	app.Use("/ws", handlers.WebSocketUpgrade())
+	app.Get("/ws/boards/:id", websocket.New(handlers.HandleWebSocket))
 }

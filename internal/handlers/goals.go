@@ -119,6 +119,16 @@ func UpdateGoal(c *fiber.Ctx) error {
 		}
 	}
 
+	// Broadcast goal update to other connected clients
+	if board.BoardType == "shared" {
+		WS.Broadcast(boardID, userID, WSEvent{
+			Type:    EventGoalUpdated,
+			BoardID: boardID.String(),
+			UserID:  userID.String(),
+			Data:    goal,
+		})
+	}
+
 	return c.JSON(goal)
 }
 
@@ -216,7 +226,16 @@ func ToggleGoalCompletion(c *fiber.Ctx) error {
 		})
 	}
 
-	
+	// Broadcast toggle for shared boards (all state changes)
+	if board.BoardType == "shared" {
+		WS.Broadcast(boardID, userID, WSEvent{
+			Type:    EventGoalUpdated,
+			BoardID: boardID.String(),
+			UserID:  userID.String(),
+			Data:    goal,
+		})
+	}
+
 	gemsAwarded := 0
 	milestones := []string{}
 	if goal.Status == "completed" && !wasCompleted {
@@ -376,6 +395,18 @@ func ToggleGoalCompletion(c *fiber.Ctx) error {
 				name+" completed \""+goalTitle+"\" on "+board.Title,
 				map[string]interface{}{"boardId": boardID.String(), "goalId": goal.ID.String()},
 			)
+
+			// Broadcast via WebSocket
+			WS.Broadcast(boardID, userID, WSEvent{
+				Type:    EventGoalCompleted,
+				BoardID: boardID.String(),
+				UserID:  userID.String(),
+				Data: map[string]interface{}{
+					"goalTitle": goalTitle,
+					"position":  goal.Position,
+					"userName":  name,
+				},
+			})
 		}
 	}
 
