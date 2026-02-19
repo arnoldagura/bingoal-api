@@ -45,6 +45,7 @@ func Migrate() error {
 		&models.BoardInvite{},
 		&models.Activity{},
 		&models.Reaction{},
+		&models.Comment{},
 		&models.Notification{},
 	)
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/arnold/bingoals-api/internal/config"
 	"github.com/arnold/bingoals-api/internal/database"
 	"github.com/arnold/bingoals-api/internal/routes"
+	"github.com/arnold/bingoals-api/internal/services"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
@@ -31,6 +32,9 @@ func main() {
 	if err := database.Migrate(); err != nil {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}
+
+	// Initialize push notifications (no-op if not configured)
+	services.InitPush(cfg.FCMServiceAccount)
 
 	// Create Fiber app
 	app := fiber.New(fiber.Config{

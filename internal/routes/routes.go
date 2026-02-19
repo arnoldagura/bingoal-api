@@ -55,12 +55,18 @@ func Setup(app *fiber.App) {
 	goals := protected.Group("/goals")
 	goals.Post("/:id/reactions", handlers.AddReaction)
 	goals.Get("/:id/reactions", handlers.GetGoalReactions)
+	goals.Post("/:id/comments", handlers.AddComment)
+	goals.Get("/:id/comments", handlers.GetGoalComments)
+	goals.Delete("/:id/comments/:commentId", handlers.DeleteComment)
 
 	// Notifications
 	notifications := protected.Group("/notifications")
 	notifications.Get("/", handlers.GetNotifications)
 	notifications.Put("/:id/read", handlers.MarkNotificationRead)
 	notifications.Post("/read-all", handlers.MarkAllRead)
+
+	// Device token for push notifications
+	protected.Post("/device-token", handlers.RegisterDeviceToken)
 
 	// File upload
 	protected.Post("/upload", handlers.UploadImage)

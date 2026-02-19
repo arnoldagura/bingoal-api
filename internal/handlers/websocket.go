@@ -22,6 +22,8 @@ const (
 	EventGoalUpdated    = "goal_updated"
 	EventGoalCompleted  = "goal_completed"
 	EventBoardUpdated   = "board_updated"
+	EventCommentAdded   = "comment_added"
+	EventCommentDeleted = "comment_deleted"
 )
 
 // WSEvent is the JSON message sent to connected clients

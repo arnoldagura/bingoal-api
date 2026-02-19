@@ -2,11 +2,13 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
 
 	"github.com/arnold/bingoals-api/internal/database"
 	"github.com/arnold/bingoals-api/internal/middleware"
 	"github.com/arnold/bingoals-api/internal/models"
+	"github.com/arnold/bingoals-api/internal/services"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 )
@@ -81,6 +83,24 @@ func MarkAllRead(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"success": true})
 }
 
+// RegisterDeviceToken saves the FCM token for push notifications
+func RegisterDeviceToken(c *fiber.Ctx) error {
+	userID := middleware.GetUserID(c)
+
+	var req struct {
+		Token string `json:"token"`
+	}
+	if err := c.BodyParser(&req); err != nil || req.Token == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Token is required",
+		})
+	}
+
+	database.DB.Model(&models.User{}).Where("id = ?", userID).Update("fcm_token", req.Token)
+
+	return c.JSON(fiber.Map{"success": true})
+}
+
 // CreateNotification is a helper to create notifications from other handlers
 func CreateNotification(userID uuid.UUID, notifType, title, body string, metadata map[string]interface{}) {
 	notif := models.Notification{
@@ -90,15 +110,27 @@ func CreateNotification(userID uuid.UUID, notifType, title, body string, metadat
 		Body:   body,
 	}
 
+	var pushData map[string]string
 	if metadata != nil {
 		data, err := json.Marshal(metadata)
 		if err == nil {
 			s := string(data)
 			notif.Metadata = &s
 		}
+		// Convert metadata to string map for push payload
+		pushData = make(map[string]string)
+		for k, v := range metadata {
+			pushData[k] = fmt.Sprintf("%v", v)
+		}
+		pushData["type"] = notifType
 	}
 
 	database.DB.Create(&notif)
+
+	// Send push notification
+	if services.Push != nil {
+		go services.Push.SendToUser(userID, title, body, pushData)
+	}
 }
 
 // notifyBoardMembers sends a notification to all members of a board except the actor

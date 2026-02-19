@@ -19,6 +19,7 @@ type User struct {
 	DailyStreak    int            `json:"dailyStreak" gorm:"default:0"`
 	TotalGems      int            `json:"totalGems" gorm:"default:0"`
 	LastActiveDate *time.Time     `json:"lastActiveDate"`
+	FCMToken       string         `json:"-" gorm:"column:fcm_token"`
 	CreatedAt      time.Time      `json:"createdAt"`
 	UpdatedAt      time.Time      `json:"updatedAt"`
 	DeletedAt      gorm.DeletedAt `json:"-" gorm:"index"`
