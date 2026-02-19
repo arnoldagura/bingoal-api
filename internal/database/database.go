@@ -47,5 +47,7 @@ func Migrate() error {
 		&models.Reaction{},
 		&models.Comment{},
 		&models.Notification{},
+		&models.GoalMember{},
+		&models.MiniGoalMember{},
 	)
 }

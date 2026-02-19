@@ -63,7 +63,14 @@ func findGoalByBoardAndPosition(c *fiber.Ctx) (*models.Goal, *models.Board, erro
 	}
 
 	var board models.Board
-	if err := database.DB.Where("id = ? AND user_id = ?", boardID, userID).First(&board).Error; err != nil {
+	if err := database.DB.Where("id = ?", boardID).First(&board).Error; err != nil {
+		return nil, nil, c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Board not found",
+		})
+	}
+
+	// Check access: owner or member
+	if board.UserID != userID && !isBoardMember(boardID, userID) {
 		return nil, nil, c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Board not found",
 		})
@@ -134,7 +141,7 @@ func CreateMiniGoal(c *fiber.Ctx) error {
 }
 
 func ToggleMiniGoal(c *fiber.Ctx) error {
-	goal, _, fiberErr := findGoalByBoardAndPosition(c)
+	goal, board, fiberErr := findGoalByBoardAndPosition(c)
 	if fiberErr != nil {
 		return fiberErr
 	}
@@ -153,6 +160,35 @@ func ToggleMiniGoal(c *fiber.Ctx) error {
 		})
 	}
 
+	if board.BoardType == "shared" {
+		userID := middleware.GetUserID(c)
+
+		// Find or create MiniGoalMember for this user
+		var mgm models.MiniGoalMember
+		err := database.DB.Where("mini_goal_id = ? AND user_id = ?", miniGoal.ID, userID).First(&mgm).Error
+		if err != nil {
+			mgm = models.MiniGoalMember{
+				MiniGoalID: miniGoal.ID,
+				UserID:     userID,
+			}
+		}
+
+		mgm.IsComplete = !mgm.IsComplete
+
+		if mgm.ID == (uuid.UUID{}) {
+			database.DB.Create(&mgm)
+		} else {
+			database.DB.Save(&mgm)
+		}
+
+		recalculateGoalProgressForMember(goal.ID, userID)
+
+		// Return mini-goal with this user's completion overlaid
+		miniGoal.IsComplete = mgm.IsComplete
+		return c.JSON(miniGoal)
+	}
+
+	// Personal board: toggle directly on the mini-goal
 	miniGoal.IsComplete = !miniGoal.IsComplete
 	if err := database.DB.Save(&miniGoal).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -163,6 +199,66 @@ func ToggleMiniGoal(c *fiber.Ctx) error {
 	recalculateGoalProgress(goal.ID)
 
 	return c.JSON(miniGoal)
+}
+
+// recalculateGoalProgressForMember recalculates per-member goal progress from MiniGoalMember rows.
+func recalculateGoalProgressForMember(goalID, userID uuid.UUID) {
+	var miniGoals []models.MiniGoal
+	database.DB.Where("goal_id = ?", goalID).Find(&miniGoals)
+
+	// Get this user's MiniGoalMember rows
+	miniGoalIDs := make([]uuid.UUID, len(miniGoals))
+	for i, mg := range miniGoals {
+		miniGoalIDs[i] = mg.ID
+	}
+
+	memberComplete := make(map[uuid.UUID]bool)
+	if len(miniGoalIDs) > 0 {
+		var mgms []models.MiniGoalMember
+		database.DB.Where("mini_goal_id IN ? AND user_id = ?", miniGoalIDs, userID).Find(&mgms)
+		for _, mgm := range mgms {
+			memberComplete[mgm.MiniGoalID] = mgm.IsComplete
+		}
+	}
+
+	progress := 0
+	for _, mg := range miniGoals {
+		if memberComplete[mg.ID] {
+			progress += mg.Percentage
+		}
+	}
+	if progress > 100 {
+		progress = 100
+	}
+
+	// Find or create GoalMember
+	var gm models.GoalMember
+	err := database.DB.Where("goal_id = ? AND user_id = ?", goalID, userID).First(&gm).Error
+	if err != nil {
+		gm = models.GoalMember{GoalID: goalID, UserID: userID}
+	}
+
+	gm.Progress = progress
+	if progress >= 100 {
+		gm.Status = "completed"
+		gm.IsCompleted = true
+		now := time.Now()
+		gm.CompletedAt = &now
+	} else if progress > 0 {
+		gm.Status = "in_progress"
+		gm.IsCompleted = false
+		gm.CompletedAt = nil
+	} else {
+		gm.Status = "not_started"
+		gm.IsCompleted = false
+		gm.CompletedAt = nil
+	}
+
+	if gm.ID == (uuid.UUID{}) {
+		database.DB.Create(&gm)
+	} else {
+		database.DB.Save(&gm)
+	}
 }
 
 func UpdateMiniGoal(c *fiber.Ctx) error {

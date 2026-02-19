@@ -43,12 +43,25 @@ func GetBoards(c *fiber.Ctx) error {
 	// Convert to summaries
 	summaries := make([]models.BoardSummary, len(boards))
 	for i, board := range boards {
-		goalCount := 0
+		goalCount := len(board.Goals)
 		completedCount := 0
-		for _, goal := range board.Goals {
-			goalCount++
-			if goal.IsCompleted {
-				completedCount++
+
+		if board.BoardType == "shared" && goalCount > 0 {
+			// For shared boards, count from GoalMember table for this user
+			goalIDs := make([]uuid.UUID, goalCount)
+			for j, g := range board.Goals {
+				goalIDs[j] = g.ID
+			}
+			var memberCompleted int64
+			database.DB.Model(&models.GoalMember{}).
+				Where("goal_id IN ? AND user_id = ? AND is_completed = true", goalIDs, userID).
+				Count(&memberCompleted)
+			completedCount = int(memberCompleted)
+		} else {
+			for _, goal := range board.Goals {
+				if goal.IsCompleted {
+					completedCount++
+				}
 			}
 		}
 
@@ -116,6 +129,9 @@ func GetBoard(c *fiber.Ctx) error {
 			})
 		}
 	}
+
+	// Overlay per-member status for shared boards
+	overlayMemberStatus(board.Goals, board.BoardType, userID)
 
 	return c.JSON(board)
 }
