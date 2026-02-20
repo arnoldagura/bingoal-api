@@ -77,6 +77,9 @@ func UpdateGoal(c *fiber.Ctx) error {
 	if req.ImageURL != nil {
 		goal.ImageURL = req.ImageURL
 	}
+	if req.Mood != nil {
+		goal.Mood = req.Mood
+	}
 	if req.IsCompleted != nil {
 		goal.IsCompleted = *req.IsCompleted
 		if *req.IsCompleted {
@@ -94,6 +97,7 @@ func UpdateGoal(c *fiber.Ctx) error {
 		goal.Description = nil
 		goal.Icon = nil
 		goal.ImageURL = nil
+		goal.Mood = nil
 		goal.Status = "not_started"
 		goal.IsCompleted = false
 		goal.Progress = 0
@@ -629,4 +633,87 @@ func overlayMemberStatus(goals []models.Goal, boardType string, userID uuid.UUID
 			}
 		}
 	}
+}
+
+// GalleryItem is returned by the GET /api/gallery endpoint
+type GalleryItem struct {
+	MilestoneID string  `json:"milestoneId"`
+	Title       string  `json:"title"`
+	ImageURL    *string `json:"imageUrl"`
+	IsComplete  bool    `json:"isComplete"`
+	GoalTitle   string  `json:"goalTitle"`
+	BoardTitle  string  `json:"boardTitle"`
+	BoardID     string  `json:"boardId"`
+	Position    int     `json:"position"`
+	CreatedAt   string  `json:"createdAt"`
+}
+
+// GetGallery returns all milestones across all of the user's boards.
+func GetGallery(c *fiber.Ctx) error {
+	userID := middleware.GetUserID(c)
+
+	// Fetch all boards the user owns or is a member of
+	var boards []models.Board
+	database.DB.Where("user_id = ?", userID).Find(&boards)
+
+	// Also include shared boards the user is a member of
+	var memberBoards []models.Board
+	database.DB.
+		Joins("JOIN board_members ON board_members.board_id = boards.id").
+		Where("board_members.user_id = ? AND boards.user_id != ?", userID, userID).
+		Find(&memberBoards)
+	boards = append(boards, memberBoards...)
+
+	if len(boards) == 0 {
+		return c.JSON([]GalleryItem{})
+	}
+
+	boardIDs := make([]uuid.UUID, len(boards))
+	boardMap := make(map[uuid.UUID]models.Board)
+	for i, b := range boards {
+		boardIDs[i] = b.ID
+		boardMap[b.ID] = b
+	}
+
+	// Fetch all goals for those boards
+	var goals []models.Goal
+	database.DB.Where("board_id IN ?", boardIDs).Find(&goals)
+
+	if len(goals) == 0 {
+		return c.JSON([]GalleryItem{})
+	}
+
+	goalIDs := make([]uuid.UUID, len(goals))
+	goalMap := make(map[uuid.UUID]models.Goal)
+	for i, g := range goals {
+		goalIDs[i] = g.ID
+		goalMap[g.ID] = g
+	}
+
+	// Fetch all mini-goals for those goals, ordered newest first
+	var miniGoals []models.MiniGoal
+	database.DB.Where("goal_id IN ?", goalIDs).Order("created_at DESC").Find(&miniGoals)
+
+	items := make([]GalleryItem, 0, len(miniGoals))
+	for _, mg := range miniGoals {
+		goal := goalMap[mg.GoalID]
+		board := boardMap[goal.BoardID]
+		goalTitle := ""
+		if goal.Title != nil {
+			goalTitle = *goal.Title
+		}
+		items = append(items, GalleryItem{
+			MilestoneID: mg.ID.String(),
+			Title:       mg.Title,
+			ImageURL:    mg.ImageURL,
+			IsComplete:  mg.IsComplete,
+			GoalTitle:   goalTitle,
+			BoardTitle:  board.Title,
+			BoardID:     board.ID.String(),
+			Position:    goal.Position,
+			CreatedAt:   mg.CreatedAt.Format(time.RFC3339),
+		})
+	}
+
+	return c.JSON(items)
 }

@@ -13,6 +13,7 @@ type MiniGoal struct {
 	Title      string         `json:"title" gorm:"not null"`
 	Percentage int            `json:"percentage" gorm:"not null"`
 	IsComplete bool           `json:"isComplete" gorm:"default:false"`
+	ImageURL   *string        `json:"imageUrl"`
 	CreatedAt  time.Time      `json:"createdAt"`
 	UpdatedAt  time.Time      `json:"updatedAt"`
 	DeletedAt  gorm.DeletedAt `json:"-" gorm:"index"`
@@ -34,4 +35,5 @@ type CreateMiniGoalRequest struct {
 type UpdateMiniGoalRequest struct {
 	Title      *string `json:"title"`
 	Percentage *int    `json:"percentage"`
+	ImageURL   *string `json:"imageUrl"`
 }

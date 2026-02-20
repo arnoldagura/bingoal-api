@@ -71,6 +71,9 @@ func Setup(app *fiber.App) {
 	// File upload
 	protected.Post("/upload", handlers.UploadImage)
 
+	// Vision Gallery — all milestones across user's boards
+	protected.Get("/gallery", handlers.GetGallery)
+
 	// WebSocket for real-time board updates
 	app.Use("/ws", handlers.WebSocketUpgrade())
 	app.Get("/ws/boards/:id", websocket.New(handlers.HandleWebSocket))

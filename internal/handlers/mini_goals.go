@@ -291,6 +291,9 @@ func UpdateMiniGoal(c *fiber.Ctx) error {
 	if req.Title != nil {
 		miniGoal.Title = *req.Title
 	}
+	if req.ImageURL != nil {
+		miniGoal.ImageURL = req.ImageURL
+	}
 	if req.Percentage != nil {
 		if *req.Percentage < 1 || *req.Percentage > 100 {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
