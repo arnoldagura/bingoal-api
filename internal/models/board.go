@@ -49,18 +49,19 @@ type UpdateBoardRequest struct {
 }
 
 type BoardSummary struct {
-	ID             uuid.UUID      `json:"id"`
-	Title          string         `json:"title"`
-	Year           int            `json:"year"`
-	GridSize       int            `json:"gridSize"`
-	Category       *string        `json:"category"`
-	BoardType      string         `json:"boardType"`
-	MaxMembers     int            `json:"maxMembers"`
-	IsDefault      bool           `json:"isDefault"`
-	GoalCount      int            `json:"goalCount"`
-	CompletedCount int            `json:"completedCount"`
-	MemberCount    int            `json:"memberCount"`
-	Members        []MemberInfo   `json:"members,omitempty"`
+	ID                 uuid.UUID    `json:"id"`
+	Title              string       `json:"title"`
+	Year               int          `json:"year"`
+	GridSize           int          `json:"gridSize"`
+	Category           *string      `json:"category"`
+	BoardType          string       `json:"boardType"`
+	MaxMembers         int          `json:"maxMembers"`
+	IsDefault          bool         `json:"isDefault"`
+	GoalCount          int          `json:"goalCount"`
+	CompletedCount     int          `json:"completedCount"`
+	CompletedPositions []int        `json:"completedPositions"`
+	MemberCount        int          `json:"memberCount"`
+	Members            []MemberInfo `json:"members,omitempty"`
 }
 
 // MemberInfo is a lightweight user summary for board member lists

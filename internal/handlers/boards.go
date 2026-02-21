@@ -45,6 +45,7 @@ func GetBoards(c *fiber.Ctx) error {
 	for i, board := range boards {
 		goalCount := len(board.Goals)
 		completedCount := 0
+		var completedPositions []int
 
 		if board.BoardType == "shared" && goalCount > 0 {
 			// For shared boards, count from GoalMember table for this user
@@ -52,17 +53,32 @@ func GetBoards(c *fiber.Ctx) error {
 			for j, g := range board.Goals {
 				goalIDs[j] = g.ID
 			}
-			var memberCompleted int64
+			var goalMembers []models.GoalMember
 			database.DB.Model(&models.GoalMember{}).
 				Where("goal_id IN ? AND user_id = ? AND is_completed = true", goalIDs, userID).
-				Count(&memberCompleted)
-			completedCount = int(memberCompleted)
+				Find(&goalMembers)
+			completedCount = len(goalMembers)
+			// Map completed goalIDs back to positions
+			completedGoalIDs := make(map[uuid.UUID]bool, len(goalMembers))
+			for _, gm := range goalMembers {
+				completedGoalIDs[gm.GoalID] = true
+			}
+			for _, g := range board.Goals {
+				if completedGoalIDs[g.ID] {
+					completedPositions = append(completedPositions, g.Position)
+				}
+			}
 		} else {
 			for _, goal := range board.Goals {
 				if goal.IsCompleted {
 					completedCount++
+					completedPositions = append(completedPositions, goal.Position)
 				}
 			}
+		}
+
+		if completedPositions == nil {
+			completedPositions = []int{}
 		}
 
 		// Build member info
@@ -78,18 +94,19 @@ func GetBoards(c *fiber.Ctx) error {
 		}
 
 		summaries[i] = models.BoardSummary{
-			ID:             board.ID,
-			Title:          board.Title,
-			Year:           board.Year,
-			GridSize:       board.GridSize,
-			Category:       board.Category,
-			BoardType:      board.BoardType,
-			MaxMembers:     board.MaxMembers,
-			IsDefault:      board.IsDefault,
-			GoalCount:      goalCount,
-			CompletedCount: completedCount,
-			MemberCount:    len(board.Members),
-			Members:        members,
+			ID:                 board.ID,
+			Title:              board.Title,
+			Year:               board.Year,
+			GridSize:           board.GridSize,
+			Category:           board.Category,
+			BoardType:          board.BoardType,
+			MaxMembers:         board.MaxMembers,
+			IsDefault:          board.IsDefault,
+			GoalCount:          goalCount,
+			CompletedCount:     completedCount,
+			CompletedPositions: completedPositions,
+			MemberCount:        len(board.Members),
+			Members:            members,
 		}
 	}
 
