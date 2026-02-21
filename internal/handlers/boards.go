@@ -113,6 +113,9 @@ func GetBoard(c *fiber.Ctx) error {
 		}).
 		Preload("Goals.MiniGoals").
 		Preload("Goals.Reflection").
+		Preload("Goals.Memories", func(db *gorm.DB) *gorm.DB {
+			return db.Order("created_at ASC")
+		}).
 		Preload("Members.User").
 		First(&board).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{

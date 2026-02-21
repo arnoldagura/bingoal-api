@@ -28,6 +28,7 @@ type Goal struct {
 	DeletedAt     gorm.DeletedAt `json:"-" gorm:"index"`
 	MiniGoals     []MiniGoal     `json:"miniGoals,omitempty" gorm:"foreignKey:GoalID"`
 	Reflection    *Reflection    `json:"reflection,omitempty" gorm:"foreignKey:GoalID"`
+	Memories      []GoalMemory   `json:"memories,omitempty" gorm:"foreignKey:GoalID"`
 
 	// Transient field — populated by API for shared boards, not stored in DB
 	CompletedByCount int `json:"completedByCount,omitempty" gorm:"-"`

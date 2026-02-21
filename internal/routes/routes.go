@@ -39,6 +39,11 @@ func Setup(app *fiber.App) {
 	boards.Get("/:boardId/goals/:position/reflection", handlers.GetReflection)
 	boards.Put("/:boardId/goals/:position/reflection", handlers.UpsertReflection)
 
+	boards.Post("/:boardId/goals/:position/memories", handlers.CreateGoalMemory)
+	boards.Get("/:boardId/goals/:position/memories", handlers.ListGoalMemories)
+	boards.Patch("/:boardId/goals/:position/memories/:memoryId", handlers.UpdateGoalMemory)
+	boards.Delete("/:boardId/goals/:position/memories/:memoryId", handlers.DeleteGoalMemory)
+
 	// Board invites & members
 	boards.Post("/:id/invites", handlers.CreateInvite)
 	boards.Get("/:id/members", handlers.GetMembers)

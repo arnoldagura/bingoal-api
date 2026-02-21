@@ -639,6 +639,7 @@ func overlayMemberStatus(goals []models.Goal, boardType string, userID uuid.UUID
 type GalleryItem struct {
 	MilestoneID string  `json:"milestoneId"`
 	Title       string  `json:"title"`
+	Label       string  `json:"label"`
 	ImageURL    *string `json:"imageUrl"`
 	IsComplete  bool    `json:"isComplete"`
 	GoalTitle   string  `json:"goalTitle"`
@@ -712,6 +713,59 @@ func GetGallery(c *fiber.Ctx) error {
 			BoardID:     board.ID.String(),
 			Position:    goal.Position,
 			CreatedAt:   mg.CreatedAt.Format(time.RFC3339),
+		})
+	}
+
+	// Include GoalMemory items (new multi-memory system)
+	var memories []models.GoalMemory
+	if len(goalIDs) > 0 {
+		database.DB.Where("goal_id IN ?", goalIDs).Order("created_at DESC").Find(&memories)
+	}
+	goalsWithMemories := make(map[uuid.UUID]bool)
+	for _, mem := range memories {
+		goal := goalMap[mem.GoalID]
+		board := boardMap[goal.BoardID]
+		goalTitle := ""
+		if goal.Title != nil {
+			goalTitle = *goal.Title
+		}
+		imageURL := mem.ImageURL
+		items = append(items, GalleryItem{
+			MilestoneID: mem.ID.String(),
+			Title:       goalTitle,
+			Label:       mem.Label,
+			ImageURL:    &imageURL,
+			IsComplete:  goal.IsCompleted,
+			GoalTitle:   goalTitle,
+			BoardTitle:  board.Title,
+			BoardID:     board.ID.String(),
+			Position:    goal.Position,
+			CreatedAt:   mem.CreatedAt.Format(time.RFC3339),
+		})
+		goalsWithMemories[mem.GoalID] = true
+	}
+
+	// Legacy fallback: goals with a direct imageUrl but no GoalMemory entries
+	for _, goal := range goals {
+		if goal.ImageURL == nil || *goal.ImageURL == "" || goalsWithMemories[goal.ID] {
+			continue
+		}
+		board := boardMap[goal.BoardID]
+		title := ""
+		if goal.Title != nil {
+			title = *goal.Title
+		}
+		items = append(items, GalleryItem{
+			MilestoneID: goal.ID.String(),
+			Title:       title,
+			Label:       "",
+			ImageURL:    goal.ImageURL,
+			IsComplete:  goal.IsCompleted,
+			GoalTitle:   title,
+			BoardTitle:  board.Title,
+			BoardID:     board.ID.String(),
+			Position:    goal.Position,
+			CreatedAt:   goal.UpdatedAt.Format(time.RFC3339),
 		})
 	}
 

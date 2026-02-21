@@ -49,5 +49,6 @@ func Migrate() error {
 		&models.Notification{},
 		&models.GoalMember{},
 		&models.MiniGoalMember{},
+		&models.GoalMemory{},
 	)
 }
