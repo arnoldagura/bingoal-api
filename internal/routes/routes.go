@@ -79,6 +79,9 @@ func Setup(app *fiber.App) {
 	// Vision Gallery — all milestones across user's boards
 	protected.Get("/gallery", handlers.GetGallery)
 
+	// Journal — chronological timeline of goals, milestones & reflections
+	protected.Get("/journal", handlers.GetJournal)
+
 	// WebSocket for real-time board updates
 	app.Use("/ws", handlers.WebSocketUpgrade())
 	app.Get("/ws/boards/:id", websocket.New(handlers.HandleWebSocket))
