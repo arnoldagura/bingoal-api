@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"math"
 	"strconv"
 	"time"
 
@@ -11,17 +12,46 @@ import (
 	"github.com/google/uuid"
 )
 
+// effectivePercentages calculates display percentages for mini-goals.
+// Goals with nil Percentage share the remaining % equally among themselves.
+func effectivePercentages(miniGoals []models.MiniGoal) []float64 {
+	setPct := 0.0
+	unsetCount := 0
+	for _, mg := range miniGoals {
+		if mg.Percentage != nil {
+			setPct += float64(*mg.Percentage)
+		} else {
+			unsetCount++
+		}
+	}
+	remaining := 100.0 - setPct
+	eachUnset := 0.0
+	if unsetCount > 0 {
+		eachUnset = remaining / float64(unsetCount)
+	}
+	result := make([]float64, len(miniGoals))
+	for i, mg := range miniGoals {
+		if mg.Percentage != nil {
+			result[i] = float64(*mg.Percentage)
+		} else {
+			result[i] = eachUnset
+		}
+	}
+	return result
+}
 
 func recalculateGoalProgress(goalID uuid.UUID) {
 	var miniGoals []models.MiniGoal
 	database.DB.Where("goal_id = ?", goalID).Find(&miniGoals)
 
-	progress := 0
-	for _, mg := range miniGoals {
+	effs := effectivePercentages(miniGoals)
+	total := 0.0
+	for i, mg := range miniGoals {
 		if mg.IsComplete {
-			progress += mg.Percentage
+			total += effs[i]
 		}
 	}
+	progress := int(math.Round(total))
 	if progress > 100 {
 		progress = 100
 	}
@@ -104,22 +134,9 @@ func CreateMiniGoal(c *fiber.Ctx) error {
 			"error": "Title is required",
 		})
 	}
-	if req.Percentage < 1 || req.Percentage > 100 {
+	if req.Percentage != nil && (*req.Percentage < 1 || *req.Percentage > 100) {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Percentage must be between 1 and 100",
-		})
-	}
-
-	// Check total percentage doesn't exceed 100
-	var existing []models.MiniGoal
-	database.DB.Where("goal_id = ?", goal.ID).Find(&existing)
-	totalPct := req.Percentage
-	for _, mg := range existing {
-		totalPct += mg.Percentage
-	}
-	if totalPct > 100 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Total percentage would exceed 100",
 		})
 	}
 
@@ -221,12 +238,14 @@ func recalculateGoalProgressForMember(goalID, userID uuid.UUID) {
 		}
 	}
 
-	progress := 0
-	for _, mg := range miniGoals {
+	effs := effectivePercentages(miniGoals)
+	total := 0.0
+	for i, mg := range miniGoals {
 		if memberComplete[mg.ID] {
-			progress += mg.Percentage
+			total += effs[i]
 		}
 	}
+	progress := int(math.Round(total))
 	if progress > 100 {
 		progress = 100
 	}
@@ -300,19 +319,7 @@ func UpdateMiniGoal(c *fiber.Ctx) error {
 				"error": "Percentage must be between 1 and 100",
 			})
 		}
-		// Check total percentage excluding this mini-goal
-		var others []models.MiniGoal
-		database.DB.Where("goal_id = ? AND id != ?", goal.ID, miniGoalID).Find(&others)
-		totalPct := *req.Percentage
-		for _, mg := range others {
-			totalPct += mg.Percentage
-		}
-		if totalPct > 100 {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "Total percentage would exceed 100",
-			})
-		}
-		miniGoal.Percentage = *req.Percentage
+		miniGoal.Percentage = req.Percentage
 	}
 
 	if err := database.DB.Save(&miniGoal).Error; err != nil {

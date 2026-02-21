@@ -11,7 +11,7 @@ type MiniGoal struct {
 	ID         uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey"`
 	GoalID     uuid.UUID      `json:"goalId" gorm:"type:uuid;index;not null"`
 	Title      string         `json:"title" gorm:"not null"`
-	Percentage int            `json:"percentage" gorm:"not null"`
+	Percentage *int           `json:"percentage"`
 	IsComplete bool           `json:"isComplete" gorm:"default:false"`
 	ImageURL   *string        `json:"imageUrl"`
 	CreatedAt  time.Time      `json:"createdAt"`
@@ -29,7 +29,7 @@ func (m *MiniGoal) BeforeCreate(tx *gorm.DB) error {
 // MiniGoal DTOs
 type CreateMiniGoalRequest struct {
 	Title      string `json:"title" validate:"required"`
-	Percentage int    `json:"percentage" validate:"required"`
+	Percentage *int   `json:"percentage"`
 }
 
 type UpdateMiniGoalRequest struct {
