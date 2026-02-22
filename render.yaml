@@ -20,5 +20,5 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: GOOGLE_CLIENT_IDS
-        value: 656331294595-huh2kgj7go6770uh1ueti0bqm63th7tj.apps.googleusercontent.com,656331294595-3lsfm9hit45b594plokdk17i6tq8p0u8.apps.googleusercontent.com
+        value: 656331294595-huh2kgj7go6770uh1ueti0bqm63th7tj.apps.googleusercontent.com,656331294595-3lsfm9hit45b594plokdk17i6tq8p0u8.apps.googleusercontent.com,656331294595-dqlbgch4abv3805f19fkc2nlm7vbk9g0.apps.googleusercontent.com
     healthCheckPath: /health
