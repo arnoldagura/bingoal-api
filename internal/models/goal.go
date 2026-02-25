@@ -30,8 +30,9 @@ type Goal struct {
 	Reflection    *Reflection    `json:"reflection,omitempty" gorm:"foreignKey:GoalID"`
 	Memories      []GoalMemory   `json:"memories,omitempty" gorm:"foreignKey:GoalID"`
 
-	// Transient field — populated by API for shared boards, not stored in DB
+	// Transient fields — populated by API, not stored in DB
 	CompletedByCount int `json:"completedByCount,omitempty" gorm:"-"`
+	CommentCount     int `json:"commentCount,omitempty" gorm:"-"`
 }
 
 func (g *Goal) BeforeCreate(tx *gorm.DB) error {

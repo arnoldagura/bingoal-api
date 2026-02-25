@@ -153,6 +153,31 @@ func GetBoard(c *fiber.Ctx) error {
 	// Overlay per-member status for shared boards
 	overlayMemberStatus(board.Goals, board.BoardType, userID)
 
+	// Batch-fetch comment counts for all goals (single query)
+	var goalIDs []uuid.UUID
+	for _, g := range board.Goals {
+		goalIDs = append(goalIDs, g.ID)
+	}
+	if len(goalIDs) > 0 {
+		type countRow struct {
+			GoalID uuid.UUID
+			Count  int
+		}
+		var rows []countRow
+		database.DB.Model(&models.Comment{}).
+			Select("goal_id, COUNT(*) as count").
+			Where("goal_id IN ?", goalIDs).
+			Group("goal_id").
+			Scan(&rows)
+		countMap := make(map[uuid.UUID]int)
+		for _, r := range rows {
+			countMap[r.GoalID] = r.Count
+		}
+		for i := range board.Goals {
+			board.Goals[i].CommentCount = countMap[board.Goals[i].ID]
+		}
+	}
+
 	return c.JSON(board)
 }
 
