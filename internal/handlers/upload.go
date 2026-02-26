@@ -1,11 +1,18 @@
 package handlers
 
 import (
+	"bytes"
+	"context"
 	"fmt"
-	"os"
+	"io"
+	"mime"
 	"path/filepath"
 	"strings"
 
+	"github.com/arnold/bingoals-api/internal/config"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 )
@@ -34,27 +41,54 @@ func UploadImage(c *fiber.Ctx) error {
 		})
 	}
 
-	// Ensure uploads directory exists
-	uploadsDir := "uploads"
-	if err := os.MkdirAll(uploadsDir, 0755); err != nil {
+	// Read file bytes
+	src, err := file.Open()
+	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to create uploads directory",
+			"error": "Failed to open image",
+		})
+	}
+	defer src.Close()
+
+	data, err := io.ReadAll(src)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to read image",
 		})
 	}
 
-	// Generate unique filename
+	// Upload to Cloudflare R2
+	cfg := config.Load()
 	filename := fmt.Sprintf("%s%s", uuid.New().String(), ext)
-	savePath := filepath.Join(uploadsDir, filename)
+	contentType := mime.TypeByExtension(ext)
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
 
-	// Save file
-	if err := c.SaveFile(file, savePath); err != nil {
+	r2Endpoint := fmt.Sprintf("https://%s.r2.cloudflarestorage.com", cfg.R2AccountID)
+	s3Client := s3.NewFromConfig(aws.Config{
+		Region: "auto",
+		Credentials: credentials.NewStaticCredentialsProvider(
+			cfg.R2AccessKeyID,
+			cfg.R2SecretKey,
+			"",
+		),
+		BaseEndpoint: aws.String(r2Endpoint),
+	})
+
+	_, err = s3Client.PutObject(context.Background(), &s3.PutObjectInput{
+		Bucket:      aws.String(cfg.R2Bucket),
+		Key:         aws.String(filename),
+		Body:        bytes.NewReader(data),
+		ContentType: aws.String(contentType),
+	})
+	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to save image",
+			"error": "Failed to upload image",
 		})
 	}
 
-	// Return the URL path
-	imageURL := fmt.Sprintf("/uploads/%s", filename)
+	imageURL := fmt.Sprintf("%s/%s", strings.TrimRight(cfg.R2PublicURL, "/"), filename)
 	return c.JSON(fiber.Map{
 		"url": imageURL,
 	})
